@@ -60,3 +60,7 @@ coverage.xml
 .DS_Store
 debian/
 .pybuild/
+pyprojectbuild_0.1.0_amd64.snap
+prime/
+snap/
+stage/

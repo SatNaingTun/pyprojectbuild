@@ -1,27 +1,33 @@
 import argparse
 import os
+from pyprojectbuild.publishers import ppa
 from pyprojectbuild.builders import deb, snap, mac, win, flatpak
 from pyprojectbuild.utils import get_project_metadata
 
 def main():
-    parser = argparse.ArgumentParser(description="Multi-platform Python project packager.")
+    parser = argparse.ArgumentParser(description="Multi-platform Python project packager and publisher.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    builder_names = ["deb", "snap", "mac", "win", "flatpak", "all"]
-    for builder_name in builder_names:
-        sub_parser = subparsers.add_parser(builder_name, help=f"Build {builder_name} package(s)")
-        sub_parser.add_argument("path", help="Path to the target project directory")
+    # Make path optional (defaults to current working directory if omitted)
+    for action in ["deb", "snap", "mac", "win", "flatpak", "ppa", "all"]:
+        sub = subparsers.add_parser(action, help=f"Execute {action} package operation")
+        sub.add_argument(
+            "path", 
+            nargs="?", 
+            default=".", 
+            help="Path to the target project directory (default: current working directory)"
+        )
 
     args = parser.parse_args()
     project_path = os.path.abspath(args.path)
 
-    # Automatically parse project metadata and entry point from pyproject.toml
-    name, version, description, script_file, entry_func = get_project_metadata(project_path)
-    print(f"==> Target Project: {name} (v{version})")
-    print(f"==> Entry Point File: {script_file} (Function: {entry_func})")
+    name, version, description, _, _ = get_project_metadata(project_path)
+    print(f"==> Project: {name} v{version}")
 
     if args.command == "deb":
-        deb.build(project_path, name, version, description)
+        deb.build_local(project_path, name, version, description)
+    elif args.command == "ppa":
+        ppa.publish_ppa(project_path)
     elif args.command == "snap":
         snap.build(project_path, name, version, description)
     elif args.command == "mac":
@@ -31,13 +37,12 @@ def main():
     elif args.command == "flatpak":
         flatpak.build(project_path, name, version, description)
     elif args.command == "all":
-        print("==> Running standard build pipeline (Debian, Snap, Mac, Windows, Flatpak)")
-        deb.build(project_path, name, version, description)
+        print("==> Running standard local build pipeline...")
+        deb.build_local(project_path, name, version, description)
         snap.build(project_path, name, version, description)
         mac.build(project_path, name, version, description)
         win.build(project_path, name, version, description)
-        flatpak.build(project_path, name, version, description)
-        print("\n==> Standard multi-platform build assets generated successfully!")
+        print("\n==> Standard build artifacts generated successfully!")
 
 if __name__ == "__main__":
     main()
