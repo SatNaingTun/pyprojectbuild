@@ -5,7 +5,6 @@ import subprocess
 import sys
 from pyprojectbuild.utils import get_project_metadata
 
-SECRETS_FILE = ".secrets"
 REQUIRED_SECRETS = {
     "SIGNING_KEY_ID": "Enter your GPG Signing Key ID (e.g., 8ABC1234XYZ): ",
     "DEB_EMAIL": "Enter your Debian/Ubuntu Email: ",
@@ -13,11 +12,12 @@ REQUIRED_SECRETS = {
     "PPA_TARGET": "Enter your PPA Target (e.g., ppa:satnaingtun/ppa): "
 }
 
-def setup_secrets_file():
-    """Checks if .secrets exists and contains all required keys. Prompts for any missing credentials."""
+def setup_secrets_file(project_path):
+    """Checks if .secrets exists in the target project path and contains all required keys."""
+    secrets_file = os.path.join(project_path, ".secrets")
     secrets = {}
-    if os.path.exists(SECRETS_FILE):
-        with open(SECRETS_FILE, "r") as f:
+    if os.path.exists(secrets_file):
+        with open(secrets_file, "r") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
@@ -27,7 +27,7 @@ def setup_secrets_file():
     missing = [k for k in REQUIRED_SECRETS if not secrets.get(k)]
     
     if missing:
-        print(f"==> Missing or incomplete publishing credentials in '{SECRETS_FILE}'. Let's set them up.")
+        print(f"==> Missing or incomplete publishing credentials in '{secrets_file}'. Let's set them up.")
         print("These will be saved locally so you only have to enter them once.\n")
         
         for key, prompt in REQUIRED_SECRETS.items():
@@ -38,25 +38,27 @@ def setup_secrets_file():
                     sys.exit(1)
                 secrets[key] = val
         
-        with open(SECRETS_FILE, "w") as f:
+        with open(secrets_file, "w") as f:
             for key in REQUIRED_SECRETS:
                 f.write(f'{key}="{secrets[key]}"\n')
-        print(f"==> Successfully updated '{SECRETS_FILE}'!\n")
+        print(f"==> Successfully updated '{secrets_file}'!\n")
 
-def load_secrets_file():
-    """Loads environment variables from the local .secrets file."""
-    setup_secrets_file()
-    with open(SECRETS_FILE, "r") as f:
+def load_secrets_file(project_path):
+    """Loads environment variables from the local .secrets file inside the target project."""
+    setup_secrets_file(project_path)
+    secrets_file = os.path.join(project_path, ".secrets")
+    with open(secrets_file, "r") as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 key, value = line.split("=", 1)
                 os.environ[key.strip()] = value.strip("\"'")
 
-def get_gitignore_patterns():
+def get_gitignore_patterns(project_path):
     patterns = [".git", ".secrets"]
-    if os.path.exists(".gitignore"):
-        with open(".gitignore", "r") as f:
+    gitignore_path = os.path.join(project_path, ".gitignore")
+    if os.path.exists(gitignore_path):
+        with open(gitignore_path, "r") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#"):
@@ -133,14 +135,8 @@ def update_changelog(project_path, pkg_name, version, series, message):
     with open(changelog_path, "w") as f:
         f.write(entry + existing)
 
-def build_local(project_path, name, version, description):
-    _, _, _, script_file, _ = get_project_metadata(project_path)
-    print(f"\n==> Building local Debian (.deb) package for {name} v{version}...")
-    generate_debian_files(project_path, name, "https://github.com", version, description, script_file)
-    subprocess.run(["dpkg-buildpackage", "-us", "-uc"], cwd=project_path, check=True)
-
 def publish_ppa(project_path):
-    load_secrets_file()
+    load_secrets_file(project_path)
     KEY_ID = os.getenv("SIGNING_KEY_ID")
     DEB_EMAIL = os.getenv("DEB_EMAIL")
     DEB_FULLNAME = os.getenv("DEB_FULLNAME")
