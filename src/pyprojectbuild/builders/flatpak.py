@@ -1,50 +1,46 @@
+import json
 import os
 import subprocess
+import sys
+from pyprojectbuild.utils import get_project_metadata
 
 def build(project_path, name, version, description):
-    """Automatically generates flatpak manifest inside project_path and builds the bundle."""
-    print(f"\n==> Building local Flatpak package for {name} v{version} at '{project_path}'...")
-    
-    # Strictly scoped to project_path
-    flatpak_dir = os.path.join(project_path, "flatpak")
-    os.makedirs(flatpak_dir, exist_ok=True)
+    _, _, _, script_file, _ = get_project_metadata(project_path)
+    print(f"\n==> Building Flatpak package for {name} v{version} using entry point '{script_file}'...")
 
-    app_id = f"org.local.{name}"
-    manifest_path = os.path.join(flatpak_dir, f"{app_id}.json")
-    
-    manifest_content = f"""{{
-    "app-id": "{app_id}",
-    "runtime": "org.freedesktop.Platform",
-    "runtime-version": "23.08",
-    "sdk": "org.freedesktop.Sdk",
-    "command": "{name}.py",
-    "finish-args": [
-        "--share=ipc",
-        "--socket=x11"
-    ],
-    "modules": [
-        {{
-            "name": "{name}",
+    manifest_path = os.path.join(project_path, f"{name}.json")
+    manifest_data = {
+        "app-id": f"org.local.{name}",
+        "runtime": "org.freedesktop.Platform",
+        "runtime-version": "23.08",
+        "sdk": "org.freedesktop.Sdk",
+        "command": name,
+        "finish-args": ["--share=network", "--share=ipc", "--socket=x11"],
+        "modules": [{
+            "name": name,
             "buildsystem": "simple",
             "build-commands": [
-                "install -D {name}.py /app/bin/{name}.py"
+                f"install -D {script_file} /app/bin/{name}",
+                f"chmod +x /app/bin/{name}"
             ],
-            "sources": [
-                {{
-                    "type": "dir",
-                    "path": "."
-                }}
-            ]
-        }}
-    ]
-}}"""
-    with open(manifest_path, "w") as f:
-        f.write(manifest_content)
+            "sources": [{"type": "dir", "path": "."}]
+        }]
+    }
 
-    build_dir = "flatpak-build"
-    repo_dir = "flatpak-repo"
-    
-    subprocess.run(["flatpak-builder", "--user", "--install-deps-from=flathub", "--force-clean", build_dir, manifest_path], cwd=project_path, check=True)
-    subprocess.run(["flatpak-builder", "--repo=" + repo_dir, "--force-clean", build_dir, manifest_path], cwd=project_path, check=True)
-    subprocess.run(["flatpak", "build-bundle", repo_dir, f"{name}.flatpak", app_id], cwd=project_path, check=True)
-    print(f"==> Success! Local '{name}.flatpak' bundle generated in '{project_path}'.")
+    with open(manifest_path, "w") as f:
+        json.dump(manifest_data, f, indent=4)
+    os.chmod(manifest_path, 0o644)
+
+    build_dir = os.path.join(project_path, ".flatpak-builder-dir")
+    clean_env = os.environ.copy()
+    clean_env.pop("VIRTUAL_ENV", None)
+    clean_env.pop("PYTHONPATH", None)
+
+    subprocess.run(["flatpak", "remote-add", "--if-not-exists", "--user", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"], check=False, env=clean_env)
+
+    try:
+        subprocess.run(["flatpak-builder", "--user", "--install-deps-from=flathub", "--force-clean", build_dir, manifest_path], cwd=project_path, check=True, env=clean_env)
+        print(f"\n==> Success! Flatpak package built successfully for '{name}'.")
+    except subprocess.CalledProcessError as e:
+        print(f"\n[ERROR] flatpak-builder failed with exit code: {e.returncode}")
+        sys.exit(1)
