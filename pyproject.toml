@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyprojectbuild"
+version = "1.0.0"
+description = "Zero-config multi-platform packager for Python projects."
+readme = "README.md"
+authors = [
+    { name = "Sat Naing Tun" }
+]
+requires-python = ">=3.8"
+dependencies = [
+    "toml>=0.10.2; python_version < '3.11'",
+    "pyinstaller>=5.0",
+]
+
+[project.scripts]
+pyprojectbuild = "pyprojectbuild.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["pyprojectbuild*"]
