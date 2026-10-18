@@ -3,6 +3,15 @@ import os
 import re
 import subprocess
 import sys
+
+try:
+    import tomllib
+except ImportError:
+    try:
+        import toml as tomllib
+    except ImportError:
+        tomllib = None
+
 from pyprojectbuild.utils import get_project_metadata
 
 REQUIRED_SECRETS = {
@@ -76,6 +85,39 @@ def get_gitignore_patterns(project_path):
 
     return patterns
 
+def parse_pyproject_dependencies(project_path):
+    """Dynamically parses build and runtime dependencies from pyproject.toml."""
+    pyproject_path = os.path.join(project_path, "pyproject.toml")
+    
+    build_deps = [
+        "debhelper-compat (= 13)",
+        "dh-python",
+        "pybuild-plugin-pyproject",
+        "python3",
+        "python3-dev",
+        "python3-build",
+        "python3-wheel",
+        "python3-setuptools"
+    ]
+    runtime_deps = ["python3 (>= 3.8)"]
+
+    if os.path.exists(pyproject_path) and tomllib is not None:
+        try:
+            with open(pyproject_path, "rb") as f:
+                data = tomllib.load(f)
+
+            project = data.get("project", {})
+            dependencies = project.get("dependencies", [])
+            for dep in dependencies:
+                pkg = re.split(r'[<>!=~ \t]+', dep.strip())[0].lower()
+                deb_name = f"python3-{pkg}"
+                if deb_name not in runtime_deps:
+                    runtime_deps.append(deb_name)
+        except Exception:
+            pass
+
+    return ", ".join(build_deps), ", ".join(runtime_deps)
+
 def generate_debian_files(project_path, pkg_name, repo_url, version, description, script_file):
     debian_dir = os.path.join(project_path, "debian")
     os.makedirs(debian_dir, exist_ok=True)
@@ -88,7 +130,7 @@ def generate_debian_files(project_path, pkg_name, repo_url, version, description
     deb_fullname = os.getenv("DEB_FULLNAME", "Maintainer")
     deb_email = os.getenv("DEB_EMAIL", "maintainer@example.com")
 
-    build_deps = "debhelper-compat (= 13), dh-python, pybuild-plugin-pyproject, python3, python3-dev, python3-build, python3-wheel"
+    build_deps, runtime_deps = parse_pyproject_dependencies(project_path)
 
     control_content = f"""Source: {pkg_name}
 Section: utils
@@ -100,15 +142,19 @@ Homepage: {repo_url}
 
 Package: {pkg_name}
 Architecture: all
-Depends: ${{shlibs:Depends}}, ${{misc:Depends}}, python3 (>= 3.8)
+Depends: ${{shlibs:Depends}}, ${{misc:Depends}}, {runtime_deps}
 Description: {description}
 """
-    with open(os.path.join(debian_dir, "control"), "w") as f:
+    control_path = os.path.join(debian_dir, "control")
+    with open(control_path, "w") as f:
         f.write(control_content)
+    os.chmod(control_path, 0o644)
 
     os.makedirs(os.path.join(debian_dir, "source"), exist_ok=True)
-    with open(os.path.join(debian_dir, "source", "format"), "w") as f:
+    format_path = os.path.join(debian_dir, "source", "format")
+    with open(format_path, "w") as f:
         f.write("3.0 (quilt)\n")
+    os.chmod(format_path, 0o644)
 
     ignore_patterns = get_gitignore_patterns(project_path)
     escaped_patterns = []
@@ -132,8 +178,11 @@ Description: {description}
     else:
         options_content = ""
 
-    with open(os.path.join(debian_dir, "source", "options"), "w") as f:
-        f.write(options_content)
+    if options_content:
+        options_path = os.path.join(debian_dir, "source", "options")
+        with open(options_path, "w") as f:
+            f.write(options_content)
+        os.chmod(options_path, 0o644)
 
     current_year = datetime.datetime.now().year
     copyright_content = f"""Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
@@ -143,21 +192,25 @@ Files: *
 Copyright: {current_year} {deb_fullname} <{deb_email}>
 License: MIT
 """
-    with open(os.path.join(debian_dir, "copyright"), "w") as f:
+    copyright_path = os.path.join(debian_dir, "copyright")
+    with open(copyright_path, "w") as f:
         f.write(copyright_content)
+    os.chmod(copyright_path, 0o644)
 
     rules_content = "#!/usr/bin/make -f\n%:\n\tdh $@ --buildsystem=pybuild\n"
     rules_path = os.path.join(debian_dir, "rules")
     with open(rules_path, "w") as f:
         f.write(rules_content)
-    os.chmod(rules_path, 0o755)
+    os.chmod(rules_path, 0o755)  # rules MUST be executable
 
-    with open(os.path.join(debian_dir, "install"), "w") as f:
+    install_path = os.path.join(debian_dir, "install")
+    with open(install_path, "w") as f:
         f.write(f"{script_file} usr/bin/{pkg_name}\n")
+    os.chmod(install_path, 0o644)  # install MUST NOT be executable
 
 def update_changelog(project_path, pkg_name, version, series):
     """Updates debian/changelog. Preserves entry if it already exists, 
-       otherwise generates it automatically via git log/diff or prompts user."""
+       otherwise generates it automatically via git log/diff fallback."""
     changelog_path = os.path.join(project_path, "debian", "changelog")
     
     if os.path.exists(changelog_path):

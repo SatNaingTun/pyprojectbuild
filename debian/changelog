@@ -1,3 +1,15 @@
+pyprojectbuild (0.1.2-1~resolute) resolute; urgency=medium
+
+  * if not exist ask version 0.1.2
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sun, 18 Oct 2026 14:16:31 +0700
+
+pyprojectbuild (0.1.2-1~noble) noble; urgency=medium
+
+  * if not exist ask version 0.1.2
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sun, 18 Oct 2026 14:16:06 +0700
+
 pyprojectbuild (0.1.1-1~resolute) resolute; urgency=medium
 
   * Implement modular project layout and target path handling for CLI operations.
