@@ -143,13 +143,11 @@ Description: {description}
     control_path = os.path.join(debian_dir, "control")
     with open(control_path, "w") as f:
         f.write(control_content)
-    os.chmod(control_path, 0o644)
 
     os.makedirs(os.path.join(debian_dir, "source"), exist_ok=True)
     format_path = os.path.join(debian_dir, "source", "format")
     with open(format_path, "w") as f:
         f.write("3.0 (quilt)\n")
-    os.chmod(format_path, 0o644)
 
     ignore_patterns = get_gitignore_patterns(project_path)
     escaped_patterns = []
@@ -177,7 +175,6 @@ Description: {description}
         options_path = os.path.join(debian_dir, "source", "options")
         with open(options_path, "w") as f:
             f.write(options_content)
-        os.chmod(options_path, 0o644)
 
     current_year = datetime.datetime.now().year
     copyright_content = f"""Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
@@ -190,18 +187,24 @@ License: MIT
     copyright_path = os.path.join(debian_dir, "copyright")
     with open(copyright_path, "w") as f:
         f.write(copyright_content)
-    os.chmod(copyright_path, 0o644)
 
-    rules_content = "#!/usr/bin/make -f\n%:\n\tdh $@ --buildsystem=pybuild\n"
+    # Force chmod -x on install inside rules to bypass NTFS limitations
+    rules_content = """#!/usr/bin/make -f
+%:
+\tdh $@ --buildsystem=pybuild
+
+override_dh_install:
+\t-chmod -x debian/install
+\tdh_install
+"""
     rules_path = os.path.join(debian_dir, "rules")
     with open(rules_path, "w") as f:
         f.write(rules_content)
-    os.chmod(rules_path, 0o755)  # Rules MUST be executable
+    os.chmod(rules_path, 0o755)
 
     install_path = os.path.join(debian_dir, "install")
     with open(install_path, "w") as f:
         f.write(f"{script_file} usr/bin/{pkg_name}\n")
-    os.chmod(install_path, 0o644)  # Install config MUST NOT be executable
 
 def update_changelog(project_path, pkg_name, version, series):
     changelog_path = os.path.join(project_path, "debian", "changelog")
@@ -240,7 +243,6 @@ def update_changelog(project_path, pkg_name, version, series):
     with open(changelog_path, "w") as f:
         f.write(entry + existing)
 
-    os.chmod(changelog_path, 0o644)
     print(f"==> Created automated changelog entry for {series} (Version: {version})")
 
 def publish_ppa(project_path):
