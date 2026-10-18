@@ -155,42 +155,43 @@ License: MIT
     with open(os.path.join(debian_dir, "install"), "w") as f:
         f.write(f"{script_file} usr/bin/{pkg_name}\n")
 
-def update_changelog(project_path, pkg_name, version, series, message=None):
-    """Updates debian/changelog. If version entry exists, avoids overwriting. 
-       Uses git log/diff if a custom message is not provided."""
+def update_changelog(project_path, pkg_name, version, series):
+    """Updates debian/changelog. Preserves entry if it already exists, 
+       otherwise generates it automatically via git log/diff or prompts user."""
     changelog_path = os.path.join(project_path, "debian", "changelog")
     
-    # Do not overwrite if changelog entry for this version already exists
     if os.path.exists(changelog_path):
         with open(changelog_path, "r") as f:
             content = f.read()
             if f"({version})" in content:
-                print(f"==> Changelog entry for version {version} already exists. Preserving existing record[cite: 3].")
+                print(f"==> Changelog entry for version {version} already exists. Preserving existing record.")
                 return
+
+    print(f"==> No changelog entry found for version {version}. Generating automatically...")
+    
+    message = ""
+    try:
+        res = subprocess.run(["git", "log", "-1", "--pretty=format:%s"], cwd=project_path, capture_output=True, text=True, check=True)
+        message = res.stdout.strip()
+    except Exception:
+        pass
+
+    if not message:
+        try:
+            res = subprocess.run(["git", "diff", "--stat", "HEAD~1"], cwd=project_path, capture_output=True, text=True)
+            diff_stat = res.stdout.strip()
+            if diff_stat:
+                message = f"Changes summary: " + ", ".join(diff_stat.splitlines()[-1:])
+        except Exception:
+            pass
+
+    if not message:
+        message = f"Automated release for Ubuntu {series}."
 
     now = datetime.datetime.now(datetime.timezone.utc).astimezone()
     date_str = now.strftime("%a, %d %b %Y %H:%M:%S %z")
     deb_fullname = os.getenv("DEB_FULLNAME", "Maintainer")
     deb_email = os.getenv("DEB_EMAIL", "maintainer@example.com")
-
-    # Fallback to git log / git diff if message is not provided
-    if not message:
-        try:
-            res = subprocess.run(["git", "log", "-1", "--pretty=format:%s"], cwd=project_path, capture_output=True, text=True, check=True)
-            message = res.stdout.strip()
-        except Exception:
-            message = ""
-
-        if not message:
-            try:
-                res = subprocess.run(["git", "diff", "--stat", "HEAD~1"], cwd=project_path, capture_output=True, text=True)
-                diff_stat = res.stdout.strip()
-                if diff_stat:
-                    message = f"Changes summary: " + ", ".join(diff_stat.splitlines()[-1:])
-                else:
-                    message = f"Release build for Ubuntu {series}."
-            except Exception:
-                message = f"Release build for Ubuntu {series}."
 
     entry = f"{pkg_name} ({version}) {series}; urgency=medium\n\n  * {message}\n\n -- {deb_fullname} <{deb_email}>  {date_str}\n\n"
     
@@ -202,7 +203,7 @@ def update_changelog(project_path, pkg_name, version, series, message=None):
     with open(changelog_path, "w") as f:
         f.write(entry + existing)
 
-    print(f"Updated debian/changelog for {series} (Version: {version})")
+    print(f"==> Created automated changelog entry for {series} (Version: {version})")
 
 def publish_ppa(project_path):
     load_secrets_file(project_path)
@@ -223,7 +224,6 @@ def publish_ppa(project_path):
     pyproject_name, base_version, description, script_file, _ = get_project_metadata(project_path)
     pkg_name = pyproject_name
 
-    # Automatically clean up stale build artifacts/caches in the parent directory
     parent_dir = os.path.abspath(os.path.join(project_path, ".."))
     print("==> Checking for stale build artifacts in parent directory...")
     if os.path.exists(parent_dir):
