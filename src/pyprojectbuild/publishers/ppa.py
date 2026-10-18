@@ -22,7 +22,6 @@ REQUIRED_SECRETS = {
 }
 
 def setup_secrets_file(project_path):
-    """Checks if .secrets exists in the target project path and contains all required keys."""
     secrets_file = os.path.join(project_path, ".secrets")
     secrets = {}
     if os.path.exists(secrets_file):
@@ -37,8 +36,6 @@ def setup_secrets_file(project_path):
     
     if missing:
         print(f"==> Missing or incomplete publishing credentials in '{secrets_file}'. Let's set them up.")
-        print("These will be saved locally so you only have to enter them once.\n")
-        
         for key, prompt in REQUIRED_SECRETS.items():
             if not secrets.get(key):
                 val = input(prompt).strip()
@@ -53,7 +50,6 @@ def setup_secrets_file(project_path):
         print(f"==> Successfully updated '{secrets_file}'!\n")
 
 def load_secrets_file(project_path):
-    """Loads environment variables from the local .secrets file inside the target project."""
     setup_secrets_file(project_path)
     secrets_file = os.path.join(project_path, ".secrets")
     with open(secrets_file, "r") as f:
@@ -86,7 +82,6 @@ def get_gitignore_patterns(project_path):
     return patterns
 
 def parse_pyproject_dependencies(project_path):
-    """Dynamically parses build and runtime dependencies from pyproject.toml."""
     pyproject_path = os.path.join(project_path, "pyproject.toml")
     
     build_deps = [
@@ -201,16 +196,14 @@ License: MIT
     rules_path = os.path.join(debian_dir, "rules")
     with open(rules_path, "w") as f:
         f.write(rules_content)
-    os.chmod(rules_path, 0o755)  # rules MUST be executable
+    os.chmod(rules_path, 0o755)  # Rules MUST be executable
 
     install_path = os.path.join(debian_dir, "install")
     with open(install_path, "w") as f:
         f.write(f"{script_file} usr/bin/{pkg_name}\n")
-    os.chmod(install_path, 0o644)  # install MUST NOT be executable
+    os.chmod(install_path, 0o644)  # Install config MUST NOT be executable
 
 def update_changelog(project_path, pkg_name, version, series):
-    """Updates debian/changelog. Preserves entry if it already exists, 
-       otherwise generates it automatically via git log/diff fallback."""
     changelog_path = os.path.join(project_path, "debian", "changelog")
     
     if os.path.exists(changelog_path):
@@ -230,15 +223,6 @@ def update_changelog(project_path, pkg_name, version, series):
         pass
 
     if not message:
-        try:
-            res = subprocess.run(["git", "diff", "--stat", "HEAD~1"], cwd=project_path, capture_output=True, text=True)
-            diff_stat = res.stdout.strip()
-            if diff_stat:
-                message = f"Changes summary: " + ", ".join(diff_stat.splitlines()[-1:])
-        except Exception:
-            pass
-
-    if not message:
         message = f"Automated release for Ubuntu {series}."
 
     now = datetime.datetime.now(datetime.timezone.utc).astimezone()
@@ -256,6 +240,7 @@ def update_changelog(project_path, pkg_name, version, series):
     with open(changelog_path, "w") as f:
         f.write(entry + existing)
 
+    os.chmod(changelog_path, 0o644)
     print(f"==> Created automated changelog entry for {series} (Version: {version})")
 
 def publish_ppa(project_path):
@@ -266,7 +251,7 @@ def publish_ppa(project_path):
     PPA_TARGET = os.getenv("PPA_TARGET")
 
     if not KEY_ID or not DEB_EMAIL or not DEB_FULLNAME or not PPA_TARGET:
-        print("Error: Missing required environment variables in .secrets (SIGNING_KEY_ID, DEB_EMAIL, DEB_FULLNAME, PPA_TARGET).")
+        print("Error: Missing required environment variables in .secrets.")
         sys.exit(1)
 
     try:

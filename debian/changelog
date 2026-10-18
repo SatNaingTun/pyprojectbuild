@@ -1,3 +1,21 @@
+pyprojectbuild (0.1.4-1~noble) noble; urgency=medium
+
+  * pyinstaller added and not just one file
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sun, 18 Oct 2026 15:02:41 +0700
+
+pyprojectbuild (0.1.3-1~resolute) resolute; urgency=medium
+
+  * add setuptool for control v0.1.3
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sun, 18 Oct 2026 14:44:35 +0700
+
+pyprojectbuild (0.1.3-1~noble) noble; urgency=medium
+
+  * add setuptool for control v0.1.3
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sun, 18 Oct 2026 14:44:10 +0700
+
 pyprojectbuild (0.1.2-1~resolute) resolute; urgency=medium
 
   * if not exist ask version 0.1.2

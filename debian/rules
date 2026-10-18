@@ -1,3 +1,16 @@
 #!/usr/bin/make -f
 %:
-	dh $@ --buildsystem=pybuild
+	dh $@
+
+execute_before_dh_auto_build:
+	pyinstaller --noconfirm src/pyprojectbuild/cli.py
+
+override_dh_auto_install:
+	mkdir -p debian/pyprojectbuild/usr/bin
+	if [ -f dist/pyprojectbuild ]; then \
+	    cp dist/pyprojectbuild debian/pyprojectbuild/usr/bin/; \
+	elif [ -d dist/pyprojectbuild ]; then \
+	    cp -r dist/pyprojectbuild/* debian/pyprojectbuild/usr/bin/; \
+	elif [ -f dist/pyprojectbuild/pyprojectbuild ]; then \
+	    cp dist/pyprojectbuild/pyprojectbuild debian/pyprojectbuild/usr/bin/; \
+	fi
