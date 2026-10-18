@@ -1,3 +1,15 @@
+pyprojectbuild (0.1.6-1~resolute) resolute; urgency=medium
+
+  * remove debian/install v0.1.6
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sun, 18 Oct 2026 15:43:59 +0700
+
+pyprojectbuild (0.1.6-1~noble) noble; urgency=medium
+
+  * remove debian/install v0.1.6
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sun, 18 Oct 2026 15:43:34 +0700
+
 pyprojectbuild (0.1.5-1~resolute) resolute; urgency=medium
 
   * debian rules v0.1.5
