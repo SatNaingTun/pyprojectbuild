@@ -1,0 +1,35 @@
+pyprojectbuild (0.1.1-1~resolute) resolute; urgency=medium
+
+  * Implement modular project layout and target path handling for CLI operations.
+  * Add automated local .secrets credentials management for PPA publishing.
+  * Configure robust extend-diff-ignore filtering pulled from .gitignore and virtual environments (.venv).
+  * Add multi-series Ubuntu PPA publishing supporting noble and resolute with dynamic -sa and -sd archive flags.
+  * Add dynamic parsing of build and runtime dependencies from pyproject.toml.
+  * Prevent overwriting existing release entries in debian/changelog.
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sun, 18 Oct 2026 13:00:10 +0700
+
+pyprojectbuild (0.1.1-1~noble) noble; urgency=medium
+
+  * Implement modular project layout and target path handling for CLI operations.
+  * Add automated local .secrets credentials management for PPA publishing.
+  * Configure robust extend-diff-ignore filtering pulled from .gitignore and virtual environments (.venv).
+  * Add multi-series Ubuntu PPA publishing supporting noble and resolute with dynamic -sa and -sd archive flags.
+  * Add dynamic parsing of build and runtime dependencies from pyproject.toml.
+  * Prevent overwriting existing release entries in debian/changelog.
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sun, 18 Oct 2026 12:59:41 +0700
+
+pyprojectbuild (0.1.0-1~resolute) resolute; urgency=medium
+
+  * Initial prototype release of pyprojectbuild CLI utility.
+  * Establish packaging structure and base pyproject.toml compilation flow.
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sat, 17 Oct 2026 01:40:16 +0700
+
+pyprojectbuild (0.1.0-1~noble) noble; urgency=medium
+
+  * Initial prototype release of pyprojectbuild CLI utility.
+  * Establish packaging structure and base pyproject.toml compilation flow.
+
+ -- Sat Naing Tun <satnaingtun.snt@gmail.com>  Sat, 17 Oct 2026 01:39:51 +0700

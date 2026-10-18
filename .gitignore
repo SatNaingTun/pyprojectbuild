@@ -58,10 +58,10 @@ coverage.xml
 *.swp
 *.swo
 .DS_Store
-debian/
 .pybuild/
 pyprojectbuild_0.1.0_amd64.snap
 prime/
 snap/
 stage/
 .secrets
+debian/source/

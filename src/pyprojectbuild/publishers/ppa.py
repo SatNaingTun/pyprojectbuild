@@ -76,27 +76,6 @@ def get_gitignore_patterns(project_path):
 
     return patterns
 
-def parse_pyproject_dependencies(project_path):
-    """Dynamically parses build and runtime dependencies from pyproject.toml."""
-    pyproject_path = os.path.join(project_path, "pyproject.toml")
-    
-    build_deps = [
-        "debhelper-compat (= 13)",
-        "dh-python",
-        "pybuild-plugin-pyproject",
-        "python3",
-        "python3-dev",
-        "python3-build",
-        "python3-wheel"
-    ]
-    runtime_deps = ["python3 (>= 3.8)"]
-
-    if os.path.exists(pyproject_path):
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f) if 'tomllib' in globals() else {} # fallback handled or via standard parsing
-
-    return ", ".join(build_deps), ", ".join(runtime_deps)
-
 def generate_debian_files(project_path, pkg_name, repo_url, version, description, script_file):
     debian_dir = os.path.join(project_path, "debian")
     os.makedirs(debian_dir, exist_ok=True)
@@ -176,14 +155,45 @@ License: MIT
     with open(os.path.join(debian_dir, "install"), "w") as f:
         f.write(f"{script_file} usr/bin/{pkg_name}\n")
 
-def update_changelog(project_path, pkg_name, version, series, message):
+def update_changelog(project_path, pkg_name, version, series, message=None):
+    """Updates debian/changelog. If version entry exists, avoids overwriting. 
+       Uses git log/diff if a custom message is not provided."""
     changelog_path = os.path.join(project_path, "debian", "changelog")
+    
+    # Do not overwrite if changelog entry for this version already exists
+    if os.path.exists(changelog_path):
+        with open(changelog_path, "r") as f:
+            content = f.read()
+            if f"({version})" in content:
+                print(f"==> Changelog entry for version {version} already exists. Preserving existing record[cite: 3].")
+                return
+
     now = datetime.datetime.now(datetime.timezone.utc).astimezone()
     date_str = now.strftime("%a, %d %b %Y %H:%M:%S %z")
     deb_fullname = os.getenv("DEB_FULLNAME", "Maintainer")
     deb_email = os.getenv("DEB_EMAIL", "maintainer@example.com")
 
+    # Fallback to git log / git diff if message is not provided
+    if not message:
+        try:
+            res = subprocess.run(["git", "log", "-1", "--pretty=format:%s"], cwd=project_path, capture_output=True, text=True, check=True)
+            message = res.stdout.strip()
+        except Exception:
+            message = ""
+
+        if not message:
+            try:
+                res = subprocess.run(["git", "diff", "--stat", "HEAD~1"], cwd=project_path, capture_output=True, text=True)
+                diff_stat = res.stdout.strip()
+                if diff_stat:
+                    message = f"Changes summary: " + ", ".join(diff_stat.splitlines()[-1:])
+                else:
+                    message = f"Release build for Ubuntu {series}."
+            except Exception:
+                message = f"Release build for Ubuntu {series}."
+
     entry = f"{pkg_name} ({version}) {series}; urgency=medium\n\n  * {message}\n\n -- {deb_fullname} <{deb_email}>  {date_str}\n\n"
+    
     existing = ""
     if os.path.exists(changelog_path):
         with open(changelog_path, "r") as f:
@@ -191,6 +201,8 @@ def update_changelog(project_path, pkg_name, version, series, message):
 
     with open(changelog_path, "w") as f:
         f.write(entry + existing)
+
+    print(f"Updated debian/changelog for {series} (Version: {version})")
 
 def publish_ppa(project_path):
     load_secrets_file(project_path)
@@ -234,9 +246,8 @@ def publish_ppa(project_path):
 
     for idx, (series, series_version) in enumerate(target_series.items()):
         print(f"\n==> Publishing to Launchpad ({PPA_TARGET}) for series: {series} ({series_version})...")
-        update_changelog(project_path, pkg_name, series_version, series, f"Automated release for Ubuntu {series}.")
+        update_changelog(project_path, pkg_name, series_version, series)
         
-        # Use -sa for the first series upload, and -sd for subsequent series
         debuild_flag = "-sa" if idx == 0 else "-sd"
         subprocess.run(["debuild", "-S", debuild_flag, f"-k{KEY_ID}"], cwd=project_path, env={**os.environ, "DEBEMAIL": DEB_EMAIL, "DEBFULLNAME": DEB_FULLNAME}, check=True)
         

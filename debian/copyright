@@ -1,0 +1,6 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: pyprojectbuild
+Source: https://github.com/SatNaingTun/pyprojectbuild.git
+Files: *
+Copyright: 2026 Sat Naing Tun <satnaingtun.snt@gmail.com>
+License: MIT
