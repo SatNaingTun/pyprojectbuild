@@ -55,17 +55,47 @@ def load_secrets_file(project_path):
                 os.environ[key.strip()] = value.strip("\"'")
 
 def get_gitignore_patterns(project_path):
-    patterns = [".git", ".secrets"]
+    patterns = [".git", ".secrets", "debian"]
     gitignore_path = os.path.join(project_path, ".gitignore")
+    essential_files = {"pyproject.toml", "README.md", "LICENSE"}
+
     if os.path.exists(gitignore_path):
         with open(gitignore_path, "r") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#"):
                     clean = line.rstrip("/")
+                    if clean in essential_files:
+                        continue
                     if clean and clean not in patterns:
                         patterns.append(clean)
+
+    for forced in [".venv", "venv", "__pycache__", ".pytest_cache", "build", "dist", ".pybuild"]:
+        if forced not in patterns:
+            patterns.append(forced)
+
     return patterns
+
+def parse_pyproject_dependencies(project_path):
+    """Dynamically parses build and runtime dependencies from pyproject.toml."""
+    pyproject_path = os.path.join(project_path, "pyproject.toml")
+    
+    build_deps = [
+        "debhelper-compat (= 13)",
+        "dh-python",
+        "pybuild-plugin-pyproject",
+        "python3",
+        "python3-dev",
+        "python3-build",
+        "python3-wheel"
+    ]
+    runtime_deps = ["python3 (>= 3.8)"]
+
+    if os.path.exists(pyproject_path):
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f) if 'tomllib' in globals() else {} # fallback handled or via standard parsing
+
+    return ", ".join(build_deps), ", ".join(runtime_deps)
 
 def generate_debian_files(project_path, pkg_name, repo_url, version, description, script_file):
     debian_dir = os.path.join(project_path, "debian")
@@ -79,11 +109,13 @@ def generate_debian_files(project_path, pkg_name, repo_url, version, description
     deb_fullname = os.getenv("DEB_FULLNAME", "Maintainer")
     deb_email = os.getenv("DEB_EMAIL", "maintainer@example.com")
 
+    build_deps = "debhelper-compat (= 13), dh-python, pybuild-plugin-pyproject, python3, python3-dev, python3-build, python3-wheel"
+
     control_content = f"""Source: {pkg_name}
 Section: utils
 Priority: optional
 Maintainer: {deb_fullname} <{deb_email}>
-Build-Depends: debhelper-compat (= 13), dh-python, python3, python3-dev, python3-setuptools, python3-build, python3-wheel
+Build-Depends: {build_deps}
 Standards-Version: 4.6.1
 Homepage: {repo_url}
 
@@ -98,6 +130,31 @@ Description: {description}
     os.makedirs(os.path.join(debian_dir, "source"), exist_ok=True)
     with open(os.path.join(debian_dir, "source", "format"), "w") as f:
         f.write("3.0 (quilt)\n")
+
+    ignore_patterns = get_gitignore_patterns(project_path)
+    escaped_patterns = []
+    for p in ignore_patterns:
+        clean = p.rstrip("/")
+        if not clean:
+            continue
+        if clean.endswith("/*"):
+            base = clean[:-2]
+            escaped_patterns.append(re.escape(base) + r"/.*")
+        elif "*" in clean:
+            rx = clean.replace(".", r"\.").replace("*", ".*")
+            escaped_patterns.append(rx)
+        else:
+            escaped_patterns.append(re.escape(clean))
+
+    if escaped_patterns:
+        pattern_group = "|".join(escaped_patterns)
+        regex_str = f"(^|/)({pattern_group})(/|$)"
+        options_content = f'extend-diff-ignore = "{regex_str}"\n'
+    else:
+        options_content = ""
+
+    with open(os.path.join(debian_dir, "source", "options"), "w") as f:
+        f.write(options_content)
 
     current_year = datetime.datetime.now().year
     copyright_content = f"""Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
@@ -154,6 +211,17 @@ def publish_ppa(project_path):
     pyproject_name, base_version, description, script_file, _ = get_project_metadata(project_path)
     pkg_name = pyproject_name
 
+    # Automatically clean up stale build artifacts/caches in the parent directory
+    parent_dir = os.path.abspath(os.path.join(project_path, ".."))
+    print("==> Checking for stale build artifacts in parent directory...")
+    if os.path.exists(parent_dir):
+        for filename in os.listdir(parent_dir):
+            if filename.startswith(f"{pkg_name}_"):
+                stale_path = os.path.join(parent_dir, filename)
+                if os.path.isfile(stale_path):
+                    print(f"==> Removing stale artifact: {filename}")
+                    os.remove(stale_path)
+
     target_series = {
         "noble": f"{base_version}-1~noble",
         "resolute": f"{base_version}-1~resolute",
@@ -164,11 +232,13 @@ def publish_ppa(project_path):
     orig_tarball = os.path.abspath(os.path.join(project_path, "..", f"{pkg_name}_{base_version}.orig.tar.gz"))
     subprocess.run(["git", "archive", "--format=tar.gz", f"--prefix={pkg_name}-{base_version}/", "HEAD", "-o", orig_tarball], cwd=project_path, check=True)
 
-    for series, series_version in target_series.items():
+    for idx, (series, series_version) in enumerate(target_series.items()):
         print(f"\n==> Publishing to Launchpad ({PPA_TARGET}) for series: {series} ({series_version})...")
         update_changelog(project_path, pkg_name, series_version, series, f"Automated release for Ubuntu {series}.")
         
-        subprocess.run(["debuild", "-S", "-sa", f"-k{KEY_ID}"], cwd=project_path, env={**os.environ, "DEBEMAIL": DEB_EMAIL, "DEBFULLNAME": DEB_FULLNAME}, check=True)
+        # Use -sa for the first series upload, and -sd for subsequent series
+        debuild_flag = "-sa" if idx == 0 else "-sd"
+        subprocess.run(["debuild", "-S", debuild_flag, f"-k{KEY_ID}"], cwd=project_path, env={**os.environ, "DEBEMAIL": DEB_EMAIL, "DEBFULLNAME": DEB_FULLNAME}, check=True)
         
         changes_file = os.path.abspath(os.path.join(project_path, "..", f"{pkg_name}_{series_version}_source.changes"))
         subprocess.run(["dput", PPA_TARGET, changes_file], cwd=project_path, check=True)
