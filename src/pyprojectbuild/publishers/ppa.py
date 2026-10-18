@@ -117,6 +117,7 @@ def generate_debian_files(project_path, pkg_name, repo_url, version, description
     debian_dir = os.path.join(project_path, "debian")
     os.makedirs(debian_dir, exist_ok=True)
 
+    # Remove any stale install file if it exists
     for stale in ["install", "control", "rules", "copyright", "compat"]:
         stale_path = os.path.join(debian_dir, stale)
         if os.path.exists(stale_path):
@@ -188,23 +189,12 @@ License: MIT
     with open(copyright_path, "w") as f:
         f.write(copyright_content)
 
-    # Force chmod -x on install inside rules to bypass NTFS limitations
-    rules_content = """#!/usr/bin/make -f
-%:
-\tdh $@ --buildsystem=pybuild
-
-override_dh_install:
-\t-chmod -x debian/install
-\tdh_install
-"""
+    # Standard clean rules file using pybuild without conflicting manual install steps
+    rules_content = "#!/usr/bin/make -f\n%:\n\tdh $@ --buildsystem=pybuild\n"
     rules_path = os.path.join(debian_dir, "rules")
     with open(rules_path, "w") as f:
         f.write(rules_content)
     os.chmod(rules_path, 0o755)
-
-    install_path = os.path.join(debian_dir, "install")
-    with open(install_path, "w") as f:
-        f.write(f"{script_file} usr/bin/{pkg_name}\n")
 
 def update_changelog(project_path, pkg_name, version, series):
     changelog_path = os.path.join(project_path, "debian", "changelog")
